@@ -89,7 +89,7 @@ function Calculadora() {
 
     setErrores({});
     try {
-      const response = await axios.post('http://localhost:8000/calcular', {
+      const response = await axios.post(`${process.env.REACT_APP_API_URL}/calcular`, {
         productos, tasaBcv, tasaUsdt, ganancia, costoEnvio, comisionTarjeta
       });
       setResultados(response.data.resultados);
