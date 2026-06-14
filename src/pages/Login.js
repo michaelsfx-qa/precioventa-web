@@ -14,7 +14,7 @@ function Login() {
     setError('');
     setLoading(true);
     try {
-      const response = await axios.post('http://localhost:8000/login', { usuario, clave });
+      const response = await axios.post(`${process.env.REACT_APP_API_URL}/login`, { usuario, clave });
       if (response.data.codigo === '0000') {
         navigate('/calculadora');
       }
