@@ -1,22 +1,49 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, LogOut, RotateCcw } from 'lucide-react';
 import { obtenerTasasBcv, obtenerTasaUsdt } from '../services/tasas';
+import { useNavigate } from 'react-router-dom';
+
+const STORAGE_KEY = 'calculadora_datos';
+
+const datosIniciales = {
+  productos: [{ nombreProducto: '', costoProducto: '' }],
+  ganancia: '',
+  costoEnvio: '',
+  comisionTarjeta: '',
+};
 
 function Calculadora() {
-  const [productos, setProductos] = useState([{ nombreProducto: '', costoProducto: '' }]);
+  const navigate = useNavigate();
+  const [productos, setProductos] = useState(datosIniciales.productos);
   const [tipoBcv, setTipoBcv] = useState('usd');
   const [tasaBcv, setTasaBcv] = useState('');
   const [tasaUsdt, setTasaUsdt] = useState('');
-  const [ganancia, setGanancia] = useState('');
-  const [costoEnvio, setCostoEnvio] = useState('');
-  const [comisionTarjeta, setComisionTarjeta] = useState('');
+  const [ganancia, setGanancia] = useState(datosIniciales.ganancia);
+  const [costoEnvio, setCostoEnvio] = useState(datosIniciales.costoEnvio);
+  const [comisionTarjeta, setComisionTarjeta] = useState(datosIniciales.comisionTarjeta);
   const [resultados, setResultados] = useState([]);
   const [errores, setErrores] = useState({});
-  const [loading, setLoading] = useState(false);
   const [tasas, setTasas] = useState({ usd: '', eur: '' });
   const [loadingTasas, setLoadingTasas] = useState(true);
   const [copiado, setCopiado] = useState(false);
+
+  // Cargar datos guardados
+  useEffect(() => {
+    const guardado = localStorage.getItem(STORAGE_KEY);
+    if (guardado) {
+      const datos = JSON.parse(guardado);
+      if (datos.productos) setProductos(datos.productos);
+      if (datos.ganancia) setGanancia(datos.ganancia);
+      if (datos.costoEnvio) setCostoEnvio(datos.costoEnvio);
+      if (datos.comisionTarjeta) setComisionTarjeta(datos.comisionTarjeta);
+    }
+  }, []);
+
+  // Guardar datos automáticamente
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ productos, ganancia, costoEnvio, comisionTarjeta }));
+  }, [productos, ganancia, costoEnvio, comisionTarjeta]);
 
   useEffect(() => {
     const cargarTasas = async () => {
@@ -55,14 +82,12 @@ function Calculadora() {
     if (loadingTasas) return;
 
     const nuevosErrores = validarCampos();
-
     if (Object.keys(nuevosErrores).length > 0) {
       setResultados([]);
       return;
     }
 
     setErrores({});
-    setLoading(true);
     try {
       const response = await axios.post('http://localhost:8000/calcular', {
         productos, tasaBcv, tasaUsdt, ganancia, costoEnvio, comisionTarjeta
@@ -86,16 +111,12 @@ function Calculadora() {
         setErrores({ general: 'Error al calcular' });
       }
       setResultados([]);
-    } finally {
-      setLoading(false);
     }
   }, [productos, tasaBcv, tasaUsdt, ganancia, costoEnvio, comisionTarjeta, loadingTasas, validarCampos]);
 
   useEffect(() => {
     if (loadingTasas) return;
-    const timer = setTimeout(() => {
-      calcular();
-    }, 300);
+    const timer = setTimeout(() => calcular(), 300);
     return () => clearTimeout(timer);
   }, [calcular, loadingTasas]);
 
@@ -137,13 +158,11 @@ function Calculadora() {
 
   const actualizarCampo = (setter, campo, valor) => {
     setter(valor);
-
     const mensajes = {
       ganancia: 'El porcentaje de ganancia no es válido',
       costoEnvio: 'El costo de envío no es válido',
       comisionTarjeta: 'La comisión de tarjeta no es válida',
     };
-
     const camposOpcionales = ['costoEnvio', 'comisionTarjeta'];
     const esValido = camposOpcionales.includes(campo)
       ? valor === '' || esNumeroValido(valor)
@@ -158,6 +177,20 @@ function Calculadora() {
         return nuevos;
       });
     }
+  };
+
+  const limpiarTodo = () => {
+    setProductos([{ nombreProducto: '', costoProducto: '' }]);
+    setGanancia('');
+    setCostoEnvio('');
+    setComisionTarjeta('');
+    setResultados([]);
+    setErrores({});
+    localStorage.removeItem(STORAGE_KEY);
+  };
+
+  const cerrarSesion = () => {
+    navigate('/');
   };
 
   const copiarResultados = () => {
@@ -175,7 +208,17 @@ function Calculadora() {
     <div style={styles.wrapper}>
       <div style={styles.card}>
 
-        <h2 style={styles.title}>Calculadora de precios</h2>
+        <div style={styles.header}>
+          <h2 style={styles.title}>Calculadora de precios</h2>
+          <div style={styles.headerBtns}>
+            <button style={styles.limpiarBtn} onClick={limpiarTodo}>
+              <RotateCcw size={14} /> Limpiar
+            </button>
+            <button style={styles.logoutBtn} onClick={cerrarSesion}>
+              <LogOut size={14} /> Salir
+            </button>
+          </div>
+        </div>
 
         <p style={styles.sectionLabel}>Productos</p>
         {productos.map((p, i) => (
@@ -338,11 +381,46 @@ const styles = {
     marginTop: '20px',
     marginBottom: '20px',
   },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerBtns: {
+    display: 'flex',
+    gap: '8px',
+  },
   title: {
     margin: 0,
-    fontSize: '22px',
+    fontSize: '20px',
     fontWeight: '700',
     color: '#111',
+  },
+  limpiarBtn: {
+    padding: '6px 12px',
+    borderRadius: '8px',
+    border: '1px solid #e5e5e5',
+    background: 'transparent',
+    fontSize: '12px',
+    fontWeight: '600',
+    color: '#888',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '5px',
+  },
+  logoutBtn: {
+    padding: '6px 12px',
+    borderRadius: '8px',
+    border: 'none',
+    background: '#fef2f2',
+    fontSize: '12px',
+    fontWeight: '600',
+    color: '#ef4444',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '5px',
   },
   sectionLabel: {
     margin: '4px 0 0',
