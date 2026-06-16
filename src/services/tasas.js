@@ -11,7 +11,7 @@ export const obtenerTasasBcv = async () => {
 export const obtenerTasaUsdt = async () => {
   const response = await axios.get('https://api.dolarvzla.com/public/usdt/exchange-rate', {
     headers: {
-      'x-dolarvzla-key': '308e27f37ea2f3cd986f4dc0d27ca5db87dafcbedf7d5044d4e6930dae67c5e7'
+      'x-dolarvzla-key': 'c518977b485a9543e2edcd01230592bf2fbb81685eefd3e1e5b81aed7f970f81'
     }
   });
   return response.data.current.sell;
