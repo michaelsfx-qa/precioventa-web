@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { Plus, Trash2, LogOut, RotateCcw } from 'lucide-react';
+import { guardarEstado, obtenerEstado } from '../services/estadoCalculadora';
 import { obtenerTasas } from '../services/tasas';
 import { useNavigate } from 'react-router-dom';
 
-const STORAGE_KEY = 'calculadora_datos';
 
 const datosIniciales = {
   productos: [{ nombreProducto: '', costoProducto: '' }],
@@ -29,20 +29,33 @@ function Calculadora() {
   const [copiado, setCopiado] = useState(false);
 
   // Cargar datos guardados
-  useEffect(() => {
-    const guardado = localStorage.getItem(STORAGE_KEY);
-    if (guardado) {
-      const datos = JSON.parse(guardado);
-      if (datos.productos) setProductos(datos.productos);
-      if (datos.ganancia) setGanancia(datos.ganancia);
-      if (datos.costoEnvio) setCostoEnvio(datos.costoEnvio);
-      if (datos.comisionTarjeta) setComisionTarjeta(datos.comisionTarjeta);
-    }
+ useEffect(() => {
+    const cargarEstado = async () => {
+      const usuarioId = sessionStorage.getItem('usuarioId');
+      if (!usuarioId) return;
+      try {
+        const datos = await obtenerEstado(usuarioId);
+        if (datos) {
+          if (datos.productos) setProductos(datos.productos);
+          if (datos.ganancia) setGanancia(datos.ganancia);
+          if (datos.costoEnvio) setCostoEnvio(datos.costoEnvio);
+          if (datos.comisionTarjeta) setComisionTarjeta(datos.comisionTarjeta);
+        }
+      } catch (err) {
+        console.error('No se pudo cargar el estado guardado');
+      }
+    };
+    cargarEstado();
   }, []);
 
   // Guardar datos automáticamente
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ productos, ganancia, costoEnvio, comisionTarjeta }));
+ useEffect(() => {
+    const usuarioId = sessionStorage.getItem('usuarioId');
+    if (!usuarioId) return;
+    const timer = setTimeout(() => {
+      guardarEstado(usuarioId, { productos, ganancia, costoEnvio, comisionTarjeta }).catch(() => {});
+    }, 500);
+    return () => clearTimeout(timer);
   }, [productos, ganancia, costoEnvio, comisionTarjeta]);
 
   useEffect(() => {
@@ -179,17 +192,21 @@ function Calculadora() {
     }
   };
 
-  const limpiarTodo = () => {
+const limpiarTodo = () => {
     setProductos([{ nombreProducto: '', costoProducto: '' }]);
     setGanancia('');
     setCostoEnvio('');
     setComisionTarjeta('');
     setResultados([]);
     setErrores({});
-    localStorage.removeItem(STORAGE_KEY);
+    const usuarioId = sessionStorage.getItem('usuarioId');
+    if (usuarioId) {
+      guardarEstado(usuarioId, { productos: [{ nombreProducto: '', costoProducto: '' }], ganancia: '', costoEnvio: '', comisionTarjeta: '' }).catch(() => {});
+    }
   };
 
   const cerrarSesion = () => {
+    sessionStorage.removeItem('usuarioId');
     navigate('/');
   };
 
