@@ -99,16 +99,24 @@ function Calculadora() {
     return nuevosErrores;
   }, [productos, ganancia]);
 
-  const calcular = useCallback(async () => {
+const calcular = useCallback(async () => {
     if (loadingTasas) return;
 
-    const nuevosErrores = validarCampos();
-    if (Object.keys(nuevosErrores).length > 0) {
+    if (!esNumeroValido(ganancia)) {
       setResultados([]);
       return;
     }
 
-    setErrores({});
+    setErrores(prev => {
+      const limpio = {};
+      Object.keys(prev).forEach(key => {
+        if (!key.startsWith('nombreProducto_') && !key.startsWith('costoProducto_')) {
+          limpio[key] = prev[key];
+        }
+      });
+      return limpio;
+    });
+
     try {
       const response = await axios.post(`${process.env.REACT_APP_API_URL}/calcular`, {
         productos, tasaBcv, tasaUsdt, ganancia, costoEnvio, comisionTarjeta
@@ -122,18 +130,16 @@ function Calculadora() {
         1003: { campo: 'ganancia', mensaje: 'El porcentaje de ganancia no es válido' },
         1004: { campo: 'costoEnvio', mensaje: 'El costo de envío no es válido' },
         1005: { campo: 'comisionTarjeta', mensaje: 'La comisión de tarjeta no es válida' },
-        1101: { campo: 'nombreProducto_0', mensaje: 'El nombre del producto no es válido' },
-        1102: { campo: 'costoProducto_0', mensaje: 'El costo del producto no es válido' },
       };
       const errorInfo = mapaErrores[codigo];
       if (errorInfo) {
-        setErrores({ [errorInfo.campo]: errorInfo.mensaje });
+        setErrores(prev => ({ ...prev, [errorInfo.campo]: errorInfo.mensaje }));
       } else {
-        setErrores({ general: 'Error al calcular' });
+        setErrores(prev => ({ ...prev, general: 'Error al calcular' }));
       }
       setResultados([]);
     }
-  }, [productos, tasaBcv, tasaUsdt, ganancia, costoEnvio, comisionTarjeta, loadingTasas, validarCampos]);
+  }, [productos, tasaBcv, tasaUsdt, ganancia, costoEnvio, comisionTarjeta, loadingTasas]);
 
   useEffect(() => {
     if (loadingTasas) return;
