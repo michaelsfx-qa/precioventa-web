@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { Plus, Trash2, LogOut, RotateCcw } from 'lucide-react';
-import { obtenerTasasBcv, obtenerTasaUsdt } from '../services/tasas';
+import { obtenerTasas } from '../services/tasas';
 import { useNavigate } from 'react-router-dom';
 
 const STORAGE_KEY = 'calculadora_datos';
@@ -48,10 +48,10 @@ function Calculadora() {
   useEffect(() => {
     const cargarTasas = async () => {
       try {
-        const [bcv, usdt] = await Promise.all([obtenerTasasBcv(), obtenerTasaUsdt()]);
-        setTasas(bcv);
-        setTasaBcv(String(bcv.usd));
-        setTasaUsdt(String(usdt));
+        const data = await obtenerTasas();
+        setTasas(data.bcv);
+        setTasaBcv(String(data.bcv.usd));
+        setTasaUsdt(String(data.usdt));
       } catch (err) {
         setErrores({ general: 'No se pudieron cargar las tasas automáticamente' });
       } finally {
