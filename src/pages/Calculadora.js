@@ -29,10 +29,15 @@ function Calculadora() {
   const [copiado, setCopiado] = useState(false);
 
   // Cargar datos guardados
- useEffect(() => {
+ const [estadoCargado, setEstadoCargado] = useState(false);
+
+  useEffect(() => {
     const cargarEstado = async () => {
       const usuarioId = sessionStorage.getItem('usuarioId');
-      if (!usuarioId) return;
+      if (!usuarioId) {
+        setEstadoCargado(true);
+        return;
+      }
       try {
         const datos = await obtenerEstado(usuarioId);
         if (datos) {
@@ -43,6 +48,8 @@ function Calculadora() {
         }
       } catch (err) {
         console.error('No se pudo cargar el estado guardado');
+      } finally {
+        setEstadoCargado(true);
       }
     };
     cargarEstado();
@@ -50,13 +57,14 @@ function Calculadora() {
 
   // Guardar datos automáticamente
  useEffect(() => {
+    if (!estadoCargado) return;
     const usuarioId = sessionStorage.getItem('usuarioId');
     if (!usuarioId) return;
     const timer = setTimeout(() => {
       guardarEstado(usuarioId, { productos, ganancia, costoEnvio, comisionTarjeta }).catch(() => {});
     }, 500);
     return () => clearTimeout(timer);
-  }, [productos, ganancia, costoEnvio, comisionTarjeta]);
+  }, [productos, ganancia, costoEnvio, comisionTarjeta, estadoCargado]);
 
   useEffect(() => {
     const cargarTasas = async () => {
