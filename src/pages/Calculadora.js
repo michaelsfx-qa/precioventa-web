@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { Plus, Trash2, LogOut, RotateCcw } from 'lucide-react';
+import { Plus, Trash2, LogOut, RotateCcw, Copy } from 'lucide-react';
 import { guardarEstado, obtenerEstado } from '../services/estadoCalculadora';
 import { obtenerTasas } from '../services/tasas';
 import { useNavigate } from 'react-router-dom';
@@ -27,6 +27,7 @@ function Calculadora() {
   const [tasas, setTasas] = useState({ usd: '', eur: '' });
   const [loadingTasas, setLoadingTasas] = useState(true);
   const [copiado, setCopiado] = useState(false);
+  const [copiadoIndex, setCopiadoIndex] = useState(null);
 
   // Cargar datos guardados
  const [estadoCargado, setEstadoCargado] = useState(false);
@@ -222,6 +223,13 @@ const limpiarTodo = () => {
     setTimeout(() => setCopiado(false), 2000);
   };
 
+  const copiarProducto = (r, index) => {
+    const texto = `${r.nombreProducto}: ${r.precioUnitarioDolares}$ / ${r.precioUnitarioBolivares}Bs`;
+    navigator.clipboard.writeText(texto);
+    setCopiadoIndex(index);
+    setTimeout(() => setCopiadoIndex(null), 1500);
+  };
+
   const ErrorMsg = ({ campo }) => errores[campo]
     ? <p style={styles.errorMsg}>{errores[campo]}</p>
     : null;
@@ -357,17 +365,31 @@ const limpiarTodo = () => {
         {errores.general && <div style={styles.errorBox}>{errores.general}</div>}
 
         {resultados.length > 0 && (
-          <div style={{ ...styles.resultados, cursor: 'pointer' }} onClick={copiarResultados}>
-            <p style={{ ...styles.sectionLabel, color: copiado ? '#22c55e' : '#aaa' }}>
-              {copiado ? '¡Copiado! ✓' : 'Resultados — toca para copiar'}
-            </p>
+          <div style={styles.resultados}>
+            <div style={styles.resultadosHeader}>
+              <p style={styles.sectionLabel}>Resultados</p>
+              <button style={{ ...styles.copiarTodoBtn, ...(copiado ? styles.copiarTodoBtnActivo : {}) }} onClick={copiarResultados}>
+                {copiado ? '✓ Copiado' : 'Copiar todo'}
+              </button>
+            </div>
             {resultados.map((r, i) => (
               <div key={i} style={styles.resultRow}>
-                <span style={styles.resultNombre}>{r.nombreProducto}</span>
-                <div style={styles.resultPrecios}>
-                  <span style={styles.resultPrecio}>{r.precioUnitarioDolares} $</span>
-                  <span style={styles.resultBs}>{r.precioUnitarioBolivares} Bs</span>
+                <div style={styles.resultInfo}>
+                  <span style={styles.resultNombre}>{r.nombreProducto}</span>
+                  <div style={styles.resultPrecios}>
+                    <span style={styles.resultPrecio}>{r.precioUnitarioDolares} $</span>
+                    <span style={styles.resultBs}>{r.precioUnitarioBolivares} Bs</span>
+                  </div>
                 </div>
+                <button
+                  style={{
+                    ...styles.copiarUnoBtn,
+                    color: copiadoIndex === i ? '#16a34a' : '#aaa',
+                  }}
+                  onClick={() => copiarProducto(r, i)}
+                >
+                  {copiadoIndex === i ? <Copy size={14} strokeWidth={2.5} /> : <Copy size={14} />}
+                </button>
               </div>
             ))}
           </div>
@@ -605,6 +627,7 @@ const styles = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: '8px',
     paddingBottom: '8px',
     borderBottom: '1px solid #eef2ff',
   },
@@ -628,6 +651,42 @@ const styles = {
     fontSize: '13px',
     fontWeight: '500',
     color: '#888',
+  },
+  resultadosHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  copiarTodoBtn: {
+    padding: '5px 12px',
+    borderRadius: '8px',
+    border: '1px solid #e0eaff',
+    background: '#f0f4ff',
+    fontSize: '12px',
+    fontWeight: '600',
+    color: '#2563eb',
+    cursor: 'pointer',
+  },
+  copiarTodoBtnActivo: {
+    background: '#dcfce7',
+    border: '1px solid #bbf7d0',
+    color: '#16a34a',
+  },
+  copiarUnoBtn: {
+    padding: '6px 8px',
+    borderRadius: '8px',
+    border: 'none',
+    background: 'transparent',
+    fontSize: '14px',
+    cursor: 'pointer',
+    flexShrink: 0,
+    transition: 'color 0.2s',
+  },
+  resultInfo: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+    flex: 1,
   },
 };
 
