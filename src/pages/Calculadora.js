@@ -28,6 +28,9 @@ function Calculadora() {
   const [loadingTasas, setLoadingTasas] = useState(true);
   const [copiado, setCopiado] = useState(false);
   const [copiadoIndex, setCopiadoIndex] = useState(null);
+  const [modalEliminar, setModalEliminar] = useState(null);
+  const [modalSalir, setModalSalir] = useState(false);
+  const [modalLimpiar, setModalLimpiar] = useState(false);
 
   // Cargar datos guardados
  const [estadoCargado, setEstadoCargado] = useState(false);
@@ -149,7 +152,12 @@ const calcular = useCallback(async () => {
   };
 
   const eliminarProducto = (index) => {
-    setProductos(productos.filter((_, i) => i !== index));
+    setModalEliminar(index);
+  };
+
+  const confirmarEliminar = () => {
+    setProductos(productos.filter((_, i) => i !== modalEliminar));
+    setModalEliminar(null);
   };
 
   const actualizarProducto = (index, campo, valor) => {
@@ -199,7 +207,11 @@ const calcular = useCallback(async () => {
   };
 
 const limpiarTodo = () => {
-    setProductos([{ nombreProducto: '', costoProducto: '' }]);
+    setModalLimpiar(true);
+  };
+
+  const confirmarLimpiar = () => {
+    setProductos([]);
     setGanancia('');
     setCostoEnvio('');
     setComisionTarjeta('');
@@ -207,11 +219,16 @@ const limpiarTodo = () => {
     setErrores({});
     const usuarioId = sessionStorage.getItem('usuarioId');
     if (usuarioId) {
-      guardarEstado(usuarioId, { productos: [{ nombreProducto: '', costoProducto: '' }], ganancia: '', costoEnvio: '', comisionTarjeta: '' }).catch(() => {});
+      guardarEstado(usuarioId, { productos: [], ganancia: '', costoEnvio: '', comisionTarjeta: '' }).catch(() => {});
     }
+    setModalLimpiar(false);
   };
 
   const cerrarSesion = () => {
+    setModalSalir(true);
+  };
+
+  const confirmarSalir = () => {
     sessionStorage.removeItem('usuarioId');
     navigate('/');
   };
@@ -255,11 +272,9 @@ const limpiarTodo = () => {
           <div key={i} style={styles.productoCard}>
             <div style={styles.productoHeader}>
               <span style={styles.productoNum}>Producto {i + 1}</span>
-              {productos.length > 1 && (
-                <button style={styles.deleteBtn} onClick={() => eliminarProducto(i)}>
-                  <Trash2 size={14} />
-                </button>
-              )}
+              <button style={styles.deleteBtn} onClick={() => eliminarProducto(i)}>
+                <Trash2 size={14} />
+              </button>
             </div>
             <input
               style={styles.input}
@@ -394,7 +409,40 @@ const limpiarTodo = () => {
             ))}
           </div>
         )}
+        {modalEliminar !== null && (
+          <div style={styles.modalOverlay}>
+            <div style={styles.modal}>
+              <p style={styles.modalTexto}>¿Estás seguro de eliminar este producto?</p>
+              <div style={styles.modalBtns}>
+                <button style={styles.modalBtnNo} onClick={() => setModalEliminar(null)}>No</button>
+                <button style={styles.modalBtnSi} onClick={confirmarEliminar}>Sí</button>
+              </div>
+            </div>
+          </div>
+        )}
 
+        {modalSalir && (
+          <div style={styles.modalOverlay}>
+            <div style={styles.modal}>
+              <p style={styles.modalTexto}>¿Estás seguro de cerrar sesión?</p>
+              <div style={styles.modalBtns}>
+                <button style={styles.modalBtnNo} onClick={() => setModalSalir(false)}>No</button>
+                <button style={styles.modalBtnSi} onClick={confirmarSalir}>Sí</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {modalLimpiar && (
+          <div style={styles.modalOverlay}>
+            <div style={styles.modal}>
+              <p style={styles.modalTexto}>¿Estás seguro de limpiar todo?</p>
+              <div style={styles.modalBtns}>
+                <button style={styles.modalBtnNo} onClick={() => setModalLimpiar(false)}>No</button>
+                <button style={styles.modalBtnSi} onClick={confirmarLimpiar}>Sí</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -687,6 +735,61 @@ const styles = {
     flexDirection: 'column',
     gap: '2px',
     flex: 1,
+  },
+  modalOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'rgba(0,0,0,0.4)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+  },
+  modal: {
+    background: '#fff',
+    borderRadius: '16px',
+    padding: '24px',
+    width: '280px',
+    boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '20px',
+  },
+  modalTexto: {
+    margin: 0,
+    fontSize: '15px',
+    fontWeight: '600',
+    color: '#111',
+    textAlign: 'center',
+  },
+  modalBtns: {
+    display: 'flex',
+    gap: '10px',
+  },
+  modalBtnNo: {
+    flex: 1,
+    padding: '10px',
+    borderRadius: '10px',
+    border: '1.5px solid #e5e5e5',
+    background: 'transparent',
+    fontSize: '14px',
+    fontWeight: '600',
+    color: '#888',
+    cursor: 'pointer',
+  },
+  modalBtnSi: {
+    flex: 1,
+    padding: '10px',
+    borderRadius: '10px',
+    border: 'none',
+    background: '#2563eb',
+    fontSize: '14px',
+    fontWeight: '600',
+    color: '#fff',
+    cursor: 'pointer',
   },
 };
 
