@@ -107,15 +107,6 @@ const calcular = useCallback(async () => {
       return;
     }
 
-    setErrores(prev => {
-      const limpio = {};
-      Object.keys(prev).forEach(key => {
-        if (!key.startsWith('nombreProducto_') && !key.startsWith('costoProducto_')) {
-          limpio[key] = prev[key];
-        }
-      });
-      return limpio;
-    });
 
     try {
       const response = await axios.post(`${process.env.REACT_APP_API_URL}/calcular`, {
