@@ -37,12 +37,14 @@ function Calculadora() {
 
   useEffect(() => {
     const cargarEstado = async () => {
-      const usuarioId = sessionStorage.getItem('usuarioId');
-      if (!usuarioId) {
+      const token = sessionStorage.getItem('token');
+      if (!token) {
         setEstadoCargado(true);
         return;
       }
       try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const usuarioId = payload.usuarioId;
         const datos = await obtenerEstado(usuarioId);
         if (datos) {
           if (datos.productos) setProductos(datos.productos);
@@ -62,8 +64,10 @@ function Calculadora() {
   // Guardar datos automáticamente
  useEffect(() => {
     if (!estadoCargado) return;
-    const usuarioId = sessionStorage.getItem('usuarioId');
-    if (!usuarioId) return;
+    const token = sessionStorage.getItem('token');
+    if (!token) return;
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const usuarioId = payload.usuarioId;
     const timer = setTimeout(() => {
       guardarEstado(usuarioId, { productos, ganancia, costoEnvio, comisionTarjeta }).catch(() => {});
     }, 500);
@@ -217,8 +221,10 @@ const limpiarTodo = () => {
     setComisionTarjeta('');
     setResultados([]);
     setErrores({});
-    const usuarioId = sessionStorage.getItem('usuarioId');
-    if (usuarioId) {
+    const token = sessionStorage.getItem('token');
+    if (token) {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const usuarioId = payload.usuarioId;
       guardarEstado(usuarioId, { productos: [], ganancia: '', costoEnvio: '', comisionTarjeta: '' }).catch(() => {});
     }
     setModalLimpiar(false);
@@ -229,7 +235,7 @@ const limpiarTodo = () => {
   };
 
   const confirmarSalir = () => {
-    sessionStorage.removeItem('usuarioId');
+    sessionStorage.removeItem('token');
     navigate('/');
   };
 

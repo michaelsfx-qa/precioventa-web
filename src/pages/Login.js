@@ -16,7 +16,7 @@ function Login() {
     try {
       const response = await axios.post(`${process.env.REACT_APP_API_URL}/login`, { usuario, clave });
       if (response.data.codigo === '0000') {
-        sessionStorage.setItem('usuarioId', response.data.usuarioId);
+        sessionStorage.setItem('token', response.data.token);
         navigate('/calculadora');
       }
     } catch (err) {
