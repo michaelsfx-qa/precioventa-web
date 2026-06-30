@@ -4,6 +4,7 @@ import { Plus, Trash2, LogOut, RotateCcw, Copy } from 'lucide-react';
 import { guardarEstado, obtenerEstado } from '../services/estadoCalculadora';
 import { obtenerTasas } from '../services/tasas';
 import { useNavigate } from 'react-router-dom';
+import { obtenerToken, obtenerUsuarioId } from '../utils/auth';
 
 
 const datosIniciales = {
@@ -15,6 +16,12 @@ const datosIniciales = {
 
 function Calculadora() {
   const navigate = useNavigate();
+  useEffect(() => {
+    const token = obtenerToken();
+    if (!token) {
+      navigate('/');
+    }
+  }, [navigate]);
   const [productos, setProductos] = useState(datosIniciales.productos);
   const [tipoBcv, setTipoBcv] = useState('usd');
   const [tasaBcv, setTasaBcv] = useState('');
@@ -37,14 +44,12 @@ function Calculadora() {
 
   useEffect(() => {
     const cargarEstado = async () => {
-      const token = sessionStorage.getItem('token');
-      if (!token) {
+      const usuarioId = obtenerUsuarioId();
+      if (!usuarioId) {
         setEstadoCargado(true);
         return;
       }
       try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const usuarioId = payload.usuarioId;
         const datos = await obtenerEstado(usuarioId);
         if (datos) {
           if (datos.productos) setProductos(datos.productos);
@@ -64,10 +69,8 @@ function Calculadora() {
   // Guardar datos automáticamente
  useEffect(() => {
     if (!estadoCargado) return;
-    const token = sessionStorage.getItem('token');
-    if (!token) return;
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    const usuarioId = payload.usuarioId;
+    const usuarioId = obtenerUsuarioId();
+    if (!usuarioId) return;
     const timer = setTimeout(() => {
       guardarEstado(usuarioId, { productos, ganancia, costoEnvio, comisionTarjeta }).catch(() => {});
     }, 500);
