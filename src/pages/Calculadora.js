@@ -224,10 +224,8 @@ const limpiarTodo = () => {
     setComisionTarjeta('');
     setResultados([]);
     setErrores({});
-    const token = sessionStorage.getItem('token');
-    if (token) {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      const usuarioId = payload.usuarioId;
+    const usuarioId = obtenerUsuarioId();
+    if (usuarioId) {
       guardarEstado(usuarioId, { productos: [], ganancia: '', costoEnvio: '', comisionTarjeta: '' }).catch(() => {});
     }
     setModalLimpiar(false);
