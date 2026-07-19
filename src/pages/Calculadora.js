@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { Plus, Trash2, LogOut, RotateCcw, Copy } from 'lucide-react';
+import { Plus, Trash2, LogOut, RotateCcw, Copy, Pencil } from 'lucide-react';
 import { guardarEstado, obtenerEstado } from '../services/estadoCalculadora';
 import { obtenerTasas } from '../services/tasas';
 import { useNavigate } from 'react-router-dom';
@@ -16,31 +16,33 @@ const datosIniciales = {
 
 function Calculadora() {
   const navigate = useNavigate();
+  
   useEffect(() => {
     const token = obtenerToken();
     if (!token) {
       navigate('/');
     }
   }, [navigate]);
-  const [productos, setProductos] = useState(datosIniciales.productos);
+
+  const [productoNuevo, setProductoNuevo] = useState({ nombreProducto: '', costoProducto: '' });
+  const [productos, setProductos] = useState([]);
   const [tipoBcv, setTipoBcv] = useState('usd');
   const [tasaBcv, setTasaBcv] = useState('');
   const [tasaUsdt, setTasaUsdt] = useState('');
-  const [ganancia, setGanancia] = useState(datosIniciales.ganancia);
-  const [costoEnvio, setCostoEnvio] = useState(datosIniciales.costoEnvio);
-  const [comisionTarjeta, setComisionTarjeta] = useState(datosIniciales.comisionTarjeta);
+  const [ganancia, setGanancia] = useState('');
+  const [costoEnvio, setCostoEnvio] = useState('');
+  const [comisionTarjeta, setComisionTarjeta] = useState('');
   const [resultados, setResultados] = useState([]);
   const [errores, setErrores] = useState({});
   const [tasas, setTasas] = useState({ usd: '', eur: '' });
   const [loadingTasas, setLoadingTasas] = useState(true);
-  const [copiado, setCopiado] = useState(false);
   const [copiadoIndex, setCopiadoIndex] = useState(null);
   const [modalEliminar, setModalEliminar] = useState(null);
   const [modalSalir, setModalSalir] = useState(false);
   const [modalLimpiar, setModalLimpiar] = useState(false);
-
-  // Cargar datos guardados
- const [estadoCargado, setEstadoCargado] = useState(false);
+  const [modalEditar, setModalEditar] = useState(null);
+  const [costoEditar, setCostoEditar] = useState('');
+  const [estadoCargado, setEstadoCargado] = useState(false);
 
   useEffect(() => {
     const cargarEstado = async () => {
@@ -66,8 +68,7 @@ function Calculadora() {
     cargarEstado();
   }, []);
 
-  // Guardar datos automáticamente
- useEffect(() => {
+  useEffect(() => {
     if (!estadoCargado) return;
     const usuarioId = obtenerUsuarioId();
     if (!usuarioId) return;
@@ -93,61 +94,44 @@ function Calculadora() {
     cargarTasas();
   }, []);
 
-  const esNumeroValido = (valor) => {
+const esNumeroValido = (valor) => {
     if (!valor || valor.trim() === '') return false;
     return !isNaN(parseFloat(valor.replace(',', '.')));
   };
 
   const esTextoValido = (valor) => valor && valor.trim().length > 0;
 
-  const validarCampos = useCallback(() => {
-    const nuevosErrores = {};
-    if (!esNumeroValido(ganancia)) nuevosErrores.ganancia = 'El porcentaje de ganancia no es válido';
-    productos.forEach((p, i) => {
-      if (!esTextoValido(p.nombreProducto)) nuevosErrores[`nombreProducto_${i}`] = 'El nombre del producto no es válido';
-      if (!esNumeroValido(p.costoProducto)) nuevosErrores[`costoProducto_${i}`] = 'El costo del producto no es válido';
-    });
-    return nuevosErrores;
-  }, [productos, ganancia]);
+  const calcularPrecio = useCallback((costo, numProds) => {
+    if (!esNumeroValido(String(costo)) || !esNumeroValido(ganancia) || !esNumeroValido(tasaBcv) || !esNumeroValido(tasaUsdt)) return null;
+    const bcv = parseFloat(tasaBcv);
+    const usdt = parseFloat(tasaUsdt);
+    const gan = parseFloat(ganancia);
+    const tar = esNumeroValido(comisionTarjeta) ? parseFloat(comisionTarjeta) : 0;
+    const env = esNumeroValido(costoEnvio) ? parseFloat(costoEnvio) : 0;
+    const envioPorProducto = numProds > 0 ? env / numProds : 0;
+    const dolaresObjetivo = parseFloat(costo) * (1 + gan / 100);
+    const precioBase = (dolaresObjetivo * usdt) / bcv;
+    const montoTarjeta = precioBase * (tar / 100);
+    const precioUnitario = precioBase + montoTarjeta + envioPorProducto;
+    const fmt = (n) => { n = Math.round(n * 100) / 100; return n % 1 === 0 ? parseInt(n) : n; };
+    return {
+      precioUnitarioDolares: fmt(precioUnitario),
+      precioUnitarioBolivares: fmt(precioUnitario * bcv)
+    };
+  }, [ganancia, tasaBcv, tasaUsdt, costoEnvio, comisionTarjeta]);
 
-const calcular = useCallback(async () => {
-    if (loadingTasas) return;
-
-    if (!esNumeroValido(ganancia)) {
-      setResultados([]);
-      return;
-    }
-
-
-    try {
-      const response = await axios.post(`${process.env.REACT_APP_API_URL}/calcular`, {
-        productos, tasaBcv, tasaUsdt, ganancia, costoEnvio, comisionTarjeta
-      });
-      setResultados(response.data.resultados);
-    } catch (err) {
-      const codigo = err.response?.data?.error?.codigo;
-      const mapaErrores = {
-        1001: { campo: 'tasaBcv', mensaje: 'La tasa BCV no es válida' },
-        1002: { campo: 'tasaUsdt', mensaje: 'La tasa USDT no es válida' },
-        1003: { campo: 'ganancia', mensaje: 'El porcentaje de ganancia no es válido' },
-        1004: { campo: 'costoEnvio', mensaje: 'El costo de envío no es válido' },
-        1005: { campo: 'comisionTarjeta', mensaje: 'La comisión de tarjeta no es válida' },
-      };
-      const errorInfo = mapaErrores[codigo];
-      if (errorInfo) {
-        setErrores(prev => ({ ...prev, [errorInfo.campo]: errorInfo.mensaje }));
-      } else {
-        setErrores(prev => ({ ...prev, general: 'Error al calcular' }));
-      }
-      setResultados([]);
-    }
-  }, [productos, tasaBcv, tasaUsdt, ganancia, costoEnvio, comisionTarjeta, loadingTasas]);
+  const recalcularTodos = useCallback(() => {
+    if (!esNumeroValido(ganancia) || !esNumeroValido(tasaBcv) || !esNumeroValido(tasaUsdt)) return;
+    setProductos(prev => prev.map(p => {
+      const resultado = calcularPrecio(p.costoProducto, prev.length);
+      return resultado ? { ...p, ...resultado } : p;
+    }));
+  }, [calcularPrecio, ganancia, tasaBcv, tasaUsdt]);
 
   useEffect(() => {
-    if (loadingTasas) return;
-    const timer = setTimeout(() => calcular(), 300);
-    return () => clearTimeout(timer);
-  }, [calcular, loadingTasas]);
+    if (loadingTasas || !estadoCargado) return;
+    recalcularTodos();
+  }, [ganancia, tasaBcv, tasaUsdt, costoEnvio, comisionTarjeta, loadingTasas, estadoCargado]);
 
   const handleTipoBcv = (tipo) => {
     setTipoBcv(tipo);
@@ -155,7 +139,26 @@ const calcular = useCallback(async () => {
   };
 
   const agregarProducto = () => {
-    setProductos([...productos, { nombreProducto: '', costoProducto: '' }]);
+    if (!esTextoValido(productoNuevo.nombreProducto)) {
+      setErrores(prev => ({ ...prev, nombreNuevo: 'El nombre del producto no es válido' }));
+      return;
+    }
+    if (!esNumeroValido(productoNuevo.costoProducto)) {
+      setErrores(prev => ({ ...prev, costoNuevo: 'El costo del producto no es válido' }));
+      return;
+    }
+    const resultado = calcularPrecio(productoNuevo.costoProducto, productos.length + 1);
+    if (!resultado) {
+      setErrores(prev => ({ ...prev, general: 'Completa las tasas y ganancia antes de agregar productos' }));
+      return;
+    }
+    setProductos(prev => [...prev, {
+      nombreProducto: productoNuevo.nombreProducto.trim(),
+      costoProducto: productoNuevo.costoProducto,
+      ...resultado
+    }]);
+    setProductoNuevo({ nombreProducto: '', costoProducto: '' });
+    setErrores({});
   };
 
   const eliminarProducto = (index) => {
@@ -167,27 +170,55 @@ const calcular = useCallback(async () => {
     setModalEliminar(null);
   };
 
-  const actualizarProducto = (index, campo, valor) => {
-    const nuevos = [...productos];
-    nuevos[index][campo] = valor;
-    setProductos(nuevos);
+  const abrirEditar = (index) => {
+    setCostoEditar(productos[index].costoProducto);
+    setModalEditar(index);
+  };
 
-    const mensajes = {
-      nombreProducto: 'El nombre del producto no es válido',
-      costoProducto: 'El costo del producto no es válido',
-    };
+  const confirmarEditar = () => {
+    if (!esNumeroValido(costoEditar)) return;
+    const resultado = calcularPrecio(costoEditar);
+    if (!resultado) return;
+    setProductos(prev => prev.map((p, i) =>
+      i === modalEditar ? { ...p, costoProducto: costoEditar, ...resultado } : p
+    ));
+    setModalEditar(null);
+  };
 
-    const esValido = campo === 'nombreProducto' ? esTextoValido(valor) : esNumeroValido(valor);
-
-    if (!esValido) {
-      setErrores(prev => ({ ...prev, [`${campo}_${index}`]: mensajes[campo] }));
-    } else {
-      setErrores(prev => {
-        const nuevos = { ...prev };
-        delete nuevos[`${campo}_${index}`];
-        return nuevos;
-      });
+  const confirmarLimpiar = () => {
+    setProductos([]);
+    setGanancia('');
+    setCostoEnvio('');
+    setComisionTarjeta('');
+    setErrores({});
+    const usuarioId = obtenerUsuarioId();
+    if (usuarioId) {
+      guardarEstado(usuarioId, { productos: [], ganancia: '', costoEnvio: '', comisionTarjeta: '' }).catch(() => {});
     }
+    setModalLimpiar(false);
+  };
+
+  const cerrarSesion = () => setModalSalir(true);
+  const limpiarTodo = () => setModalLimpiar(true);
+
+  const confirmarSalir = () => {
+    sessionStorage.removeItem('token');
+    navigate('/');
+  };
+
+  const copiarProducto = (r, index) => {
+    const texto = `${r.nombreProducto}: ${r.precioUnitarioDolares}$ / ${r.precioUnitarioBolivares}Bs`;
+    navigator.clipboard.writeText(texto);
+    setCopiadoIndex(index);
+    setTimeout(() => setCopiadoIndex(null), 1500);
+  };
+
+  const copiarTodo = () => {
+    const texto = productos
+      .filter(p => p.precioUnitarioDolares)
+      .map(p => `${p.nombreProducto}: ${p.precioUnitarioDolares}$ / ${p.precioUnitarioBolivares}Bs`)
+      .join('\n');
+    navigator.clipboard.writeText(texto);
   };
 
   const actualizarCampo = (setter, campo, valor) => {
@@ -201,67 +232,22 @@ const calcular = useCallback(async () => {
     const esValido = camposOpcionales.includes(campo)
       ? valor === '' || esNumeroValido(valor)
       : esNumeroValido(valor);
-
     if (!esValido) {
       setErrores(prev => ({ ...prev, [campo]: mensajes[campo] }));
     } else {
-      setErrores(prev => {
-        const nuevos = { ...prev };
-        delete nuevos[campo];
-        return nuevos;
-      });
+      setErrores(prev => { const n = { ...prev }; delete n[campo]; return n; });
     }
-  };
-
-const limpiarTodo = () => {
-    setModalLimpiar(true);
-  };
-
-  const confirmarLimpiar = () => {
-    setProductos([]);
-    setGanancia('');
-    setCostoEnvio('');
-    setComisionTarjeta('');
-    setResultados([]);
-    setErrores({});
-    const usuarioId = obtenerUsuarioId();
-    if (usuarioId) {
-      guardarEstado(usuarioId, { productos: [], ganancia: '', costoEnvio: '', comisionTarjeta: '' }).catch(() => {});
-    }
-    setModalLimpiar(false);
-  };
-
-  const cerrarSesion = () => {
-    setModalSalir(true);
-  };
-
-  const confirmarSalir = () => {
-    sessionStorage.removeItem('token');
-    navigate('/');
-  };
-
-  const copiarResultados = () => {
-    const texto = resultados.map(r => `${r.nombreProducto}: ${r.precioUnitarioDolares}$ / ${r.precioUnitarioBolivares}Bs`).join('\n');
-    navigator.clipboard.writeText(texto);
-    setCopiado(true);
-    setTimeout(() => setCopiado(false), 2000);
-  };
-
-  const copiarProducto = (r, index) => {
-    const texto = `${r.nombreProducto}: ${r.precioUnitarioDolares}$ / ${r.precioUnitarioBolivares}Bs`;
-    navigator.clipboard.writeText(texto);
-    setCopiadoIndex(index);
-    setTimeout(() => setCopiadoIndex(null), 1500);
   };
 
   const ErrorMsg = ({ campo }) => errores[campo]
     ? <p style={styles.errorMsg}>{errores[campo]}</p>
     : null;
 
-  return (
+ return (
     <div style={styles.wrapper}>
       <div style={styles.card}>
 
+        {/* Header */}
         <div style={styles.header}>
           <h2 style={styles.title}>Calculadora de precios</h2>
           <div style={styles.headerBtns}>
@@ -274,148 +260,126 @@ const limpiarTodo = () => {
           </div>
         </div>
 
-        <p style={styles.sectionLabel}>Productos</p>
-        {productos.map((p, i) => (
-          <div key={i} style={styles.productoCard}>
-            <div style={styles.productoHeader}>
-              <span style={styles.productoNum}>Producto {i + 1}</span>
-              <button style={styles.deleteBtn} onClick={() => eliminarProducto(i)}>
-                <Trash2 size={14} />
-              </button>
-            </div>
-            <input
-              style={styles.input}
-              placeholder="Nombre del producto"
-              value={p.nombreProducto}
-              onChange={(e) => actualizarProducto(i, 'nombreProducto', e.target.value)}
-            />
-            <ErrorMsg campo={`nombreProducto_${i}`} />
-            <div style={styles.inputGroup}>
-              <input
-                style={styles.inputInner}
-                placeholder="Costo"
-                value={p.costoProducto}
-                onChange={(e) => actualizarProducto(i, 'costoProducto', e.target.value)}
-              />
-              <span style={styles.suffix}>$</span>
-            </div>
-            <ErrorMsg campo={`costoProducto_${i}`} />
-          </div>
-        ))}
-
-        <button style={styles.addBtn} onClick={agregarProducto}>
-          <Plus size={14} /> Agregar producto
-        </button>
-
+        {/* Tasas */}
         <p style={styles.sectionLabel}>Tasas cambiarias</p>
-
-        <div style={styles.tasaCard}>
-          <div style={styles.tasaHeader}>
-            <span style={styles.tasaLabel}>Tasa BCV</span>
-            <div style={styles.toggle}>
-              <button
-                style={{ ...styles.toggleBtn, ...(tipoBcv === 'usd' ? styles.toggleActive : {}) }}
-                onClick={() => handleTipoBcv('usd')}
-              >
-                USD
-              </button>
-              <button
-                style={{ ...styles.toggleBtn, ...(tipoBcv === 'eur' ? styles.toggleActive : {}) }}
-                onClick={() => handleTipoBcv('eur')}
-              >
-                EUR
-              </button>
+        <div style={styles.tasasRow}>
+          <div style={styles.tasaCard}>
+            <div style={styles.tasaHeader}>
+              <span style={styles.tasaLabel}>BCV</span>
+              <div style={styles.toggle}>
+                <button style={{ ...styles.toggleBtn, ...(tipoBcv === 'usd' ? styles.toggleActive : {}) }} onClick={() => handleTipoBcv('usd')}>USD</button>
+                <button style={{ ...styles.toggleBtn, ...(tipoBcv === 'eur' ? styles.toggleActive : {}) }} onClick={() => handleTipoBcv('eur')}>EUR</button>
+              </div>
+            </div>
+            <div style={styles.inputGroup}>
+              <input style={styles.inputInner} value={loadingTasas ? 'Cargando...' : tasaBcv} readOnly />
+              <span style={styles.suffix}>Bs</span>
             </div>
           </div>
-          <div style={styles.inputGroup}>
-            <input style={styles.inputInner} value={loadingTasas ? 'Cargando...' : tasaBcv} readOnly />
-            <span style={styles.suffix}>Bs</span>
+          <div style={styles.tasaCard}>
+            <span style={styles.tasaLabel}>USDT</span>
+            <div style={styles.inputGroup}>
+              <input style={styles.inputInner} value={loadingTasas ? 'Cargando...' : tasaUsdt} readOnly />
+              <span style={styles.suffix}>Bs</span>
+            </div>
           </div>
-          <ErrorMsg campo="tasaBcv" />
         </div>
 
-        <div style={styles.tasaCard}>
-          <div style={styles.tasaHeader}>
-            <span style={styles.tasaLabel}>Tasa USDT</span>
-          </div>
-          <div style={styles.inputGroup}>
-            <input style={styles.inputInner} value={loadingTasas ? 'Cargando...' : tasaUsdt} readOnly />
-            <span style={styles.suffix}>Bs</span>
-          </div>
-          <ErrorMsg campo="tasaUsdt" />
-        </div>
-
+        {/* Costos adicionales */}
         <p style={styles.sectionLabel}>Costos adicionales</p>
-        <div style={styles.inputGroup}>
-          <input
-            style={styles.inputInner}
-            placeholder="Ganancia"
-            value={ganancia}
-            onChange={(e) => actualizarCampo(setGanancia, 'ganancia', e.target.value)}
-          />
-          <span style={styles.suffix}>%</span>
-        </div>
-        <ErrorMsg campo="ganancia" />
-
-        <div style={styles.row2}>
+        <div style={styles.row3}>
           <div>
             <div style={styles.inputGroup}>
-              <input
-                style={styles.inputInner}
-                placeholder="Costo envío"
-                value={costoEnvio}
-                onChange={(e) => actualizarCampo(setCostoEnvio, 'costoEnvio', e.target.value)}
-              />
+              <input style={styles.inputInner} placeholder="Ganancia" value={ganancia} onChange={(e) => actualizarCampo(setGanancia, 'ganancia', e.target.value)} />
+              <span style={styles.suffix}>%</span>
+            </div>
+            <ErrorMsg campo="ganancia" />
+          </div>
+          <div>
+            <div style={styles.inputGroup}>
+              <input style={styles.inputInner} placeholder="Envío" value={costoEnvio} onChange={(e) => actualizarCampo(setCostoEnvio, 'costoEnvio', e.target.value)} />
               <span style={styles.suffix}>$</span>
             </div>
             <ErrorMsg campo="costoEnvio" />
           </div>
           <div>
             <div style={styles.inputGroup}>
-              <input
-                style={styles.inputInner}
-                placeholder="Comisión tarjeta"
-                value={comisionTarjeta}
-                onChange={(e) => actualizarCampo(setComisionTarjeta, 'comisionTarjeta', e.target.value)}
-              />
+              <input style={styles.inputInner} placeholder="Tarjeta" value={comisionTarjeta} onChange={(e) => actualizarCampo(setComisionTarjeta, 'comisionTarjeta', e.target.value)} />
               <span style={styles.suffix}>%</span>
             </div>
             <ErrorMsg campo="comisionTarjeta" />
           </div>
         </div>
 
-        {errores.general && <div style={styles.errorBox}>{errores.general}</div>}
+        {/* Agregar producto */}
+        <p style={styles.sectionLabel}>Agregar producto</p>
+        <div style={styles.agregarRow}>
+          <input
+            style={{ ...styles.inputInner, ...styles.inputBorder, flex: 2 }}
+            placeholder="Nombre"
+            value={productoNuevo.nombreProducto}
+            onChange={(e) => {
+              setProductoNuevo(prev => ({ ...prev, nombreProducto: e.target.value }));
+              setErrores(prev => { const n = { ...prev }; delete n.nombreNuevo; return n; });
+            }}
+          />
+          <div style={{ ...styles.inputGroup, flex: 1 }}>
+            <input
+              style={styles.inputInner}
+              placeholder="Costo"
+              value={productoNuevo.costoProducto}
+              onChange={(e) => {
+                setProductoNuevo(prev => ({ ...prev, costoProducto: e.target.value }));
+                setErrores(prev => { const n = { ...prev }; delete n.costoNuevo; return n; });
+              }}
+            />
+            <span style={styles.suffix}>$</span>
+          </div>
+          <button style={styles.agregarBtn} onClick={agregarProducto}>
+            <Plus size={16} />
+          </button>
+        </div>
+        <ErrorMsg campo="nombreNuevo" />
+        <ErrorMsg campo="costoNuevo" />
+        <ErrorMsg campo="general" />
 
-        {resultados.length > 0 && (
-          <div style={styles.resultados}>
+        {/* Lista de productos */}
+        {productos.length > 0 && (
+          <>
             <div style={styles.resultadosHeader}>
-              <p style={styles.sectionLabel}>Resultados</p>
-              <button style={{ ...styles.copiarTodoBtn, ...(copiado ? styles.copiarTodoBtnActivo : {}) }} onClick={copiarResultados}>
-                {copiado ? '✓ Copiado' : 'Copiar todo'}
+              <p style={styles.sectionLabel}>Productos</p>
+              <button style={styles.copiarTodoBtn} onClick={copiarTodo}>
+                <Copy size={12} /> Copiar todo
               </button>
             </div>
-            {resultados.map((r, i) => (
-              <div key={i} style={styles.resultRow}>
-                <div style={styles.resultInfo}>
-                  <span style={styles.resultNombre}>{r.nombreProducto}</span>
-                  <div style={styles.resultPrecios}>
-                    <span style={styles.resultPrecio}>{r.precioUnitarioDolares} $</span>
-                    <span style={styles.resultBs}>{r.precioUnitarioBolivares} Bs</span>
+            {productos.map((p, i) => (
+              <div key={i} style={styles.productoCard}>
+                <div style={styles.productoTop}>
+                  <span style={styles.productoNombre}>{p.nombreProducto}</span>
+                  <div style={styles.productoBtns}>
+                    <button style={styles.btnIcono} onClick={() => copiarProducto(p, i)} title="Copiar">
+                      <Copy size={13} style={{ color: copiadoIndex === i ? '#16a34a' : '#aaa' }} />
+                    </button>
+                    <button style={styles.btnIcono} onClick={() => abrirEditar(i)} title="Editar">
+                      <Pencil size={13} style={{ color: '#2563eb' }} />
+                    </button>
+                    <button style={styles.btnIcono} onClick={() => eliminarProducto(i)} title="Eliminar">
+                      <Trash2 size={13} style={{ color: '#ef4444' }} />
+                    </button>
                   </div>
                 </div>
-                <button
-                  style={{
-                    ...styles.copiarUnoBtn,
-                    color: copiadoIndex === i ? '#16a34a' : '#aaa',
-                  }}
-                  onClick={() => copiarProducto(r, i)}
-                >
-                  {copiadoIndex === i ? <Copy size={14} strokeWidth={2.5} /> : <Copy size={14} />}
-                </button>
+                <div style={styles.productoPrecios}>
+                  <span style={styles.costoBadge}>Costo: ${p.costoProducto}</span>
+                  <span style={styles.ventaBadge}>{p.precioUnitarioDolares}$ / {p.precioUnitarioBolivares}Bs</span>
+                </div>
               </div>
             ))}
-          </div>
+          </>
         )}
+
+        {errores.general && <div style={styles.errorBox}>{errores.general}</div>}
+
+        {/* Modal eliminar */}
         {modalEliminar !== null && (
           <div style={styles.modalOverlay}>
             <div style={styles.modal}>
@@ -428,6 +392,29 @@ const limpiarTodo = () => {
           </div>
         )}
 
+        {/* Modal editar */}
+        {modalEditar !== null && (
+          <div style={styles.modalOverlay}>
+            <div style={styles.modal}>
+              <p style={styles.modalTexto}>Editar costo del producto</p>
+              <div style={styles.inputGroup}>
+                <input
+                  style={styles.inputInner}
+                  placeholder="Nuevo costo"
+                  value={costoEditar}
+                  onChange={(e) => setCostoEditar(e.target.value)}
+                />
+                <span style={styles.suffix}>$</span>
+              </div>
+              <div style={styles.modalBtns}>
+                <button style={styles.modalBtnNo} onClick={() => setModalEditar(null)}>Cancelar</button>
+                <button style={styles.modalBtnSi} onClick={confirmarEditar}>Guardar</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal salir */}
         {modalSalir && (
           <div style={styles.modalOverlay}>
             <div style={styles.modal}>
@@ -439,6 +426,8 @@ const limpiarTodo = () => {
             </div>
           </div>
         )}
+
+        {/* Modal limpiar */}
         {modalLimpiar && (
           <div style={styles.modalOverlay}>
             <div style={styles.modal}>
@@ -450,6 +439,7 @@ const limpiarTodo = () => {
             </div>
           </div>
         )}
+
       </div>
     </div>
   );
@@ -468,14 +458,14 @@ const styles = {
   },
   card: {
     background: '#fff',
-    padding: '32px 28px',
+    padding: '24px 20px',
     borderRadius: '24px',
     boxShadow: '0 8px 48px rgba(0,0,0,0.10)',
     width: '100%',
     maxWidth: '480px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '12px',
+    gap: '10px',
     boxSizing: 'border-box',
     marginTop: '20px',
     marginBottom: '20px',
@@ -491,7 +481,7 @@ const styles = {
   },
   title: {
     margin: 0,
-    fontSize: '20px',
+    fontSize: '18px',
     fontWeight: '700',
     color: '#111',
   },
@@ -529,39 +519,54 @@ const styles = {
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
   },
-  productoCard: {
-    background: '#fafafa',
-    border: '1px solid #f0f0f0',
-    borderRadius: '14px',
-    padding: '14px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-  },
-  productoHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  productoNum: {
-    fontSize: '12px',
-    fontWeight: '600',
-    color: '#888',
-  },
-  row2: {
+  tasasRow: {
     display: 'grid',
     gridTemplateColumns: '1fr 1fr',
     gap: '8px',
   },
-  input: {
-    padding: '11px 13px',
-    borderRadius: '10px',
-    border: '1.5px solid #e5e5e5',
-    fontSize: '14px',
-    outline: 'none',
-    background: '#fff',
-    width: '100%',
-    boxSizing: 'border-box',
+  tasaCard: {
+    background: '#fafafa',
+    border: '1px solid #f0f0f0',
+    borderRadius: '12px',
+    padding: '10px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+  },
+  tasaHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  tasaLabel: {
+    fontSize: '11px',
+    fontWeight: '700',
+    color: '#888',
+    textTransform: 'uppercase',
+  },
+  toggle: {
+    display: 'flex',
+    border: '1px solid #e5e5e5',
+    borderRadius: '6px',
+    overflow: 'hidden',
+  },
+  toggleBtn: {
+    padding: '3px 8px',
+    border: 'none',
+    background: 'transparent',
+    fontSize: '10px',
+    fontWeight: '600',
+    color: '#888',
+    cursor: 'pointer',
+  },
+  toggleActive: {
+    background: '#2563eb',
+    color: '#fff',
+  },
+  row3: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr 1fr',
+    gap: '8px',
   },
   inputGroup: {
     display: 'flex',
@@ -573,7 +578,7 @@ const styles = {
   },
   inputInner: {
     flex: 1,
-    padding: '11px 13px',
+    padding: '10px 12px',
     border: 'none',
     fontSize: '14px',
     outline: 'none',
@@ -581,9 +586,14 @@ const styles = {
     width: '100%',
     boxSizing: 'border-box',
   },
+  inputBorder: {
+    border: '1.5px solid #e5e5e5',
+    borderRadius: '10px',
+    padding: '10px 12px',
+  },
   suffix: {
-    padding: '0 10px',
-    fontSize: '12px',
+    padding: '0 8px',
+    fontSize: '11px',
     fontWeight: '600',
     color: '#aaa',
     background: '#f9f9f9',
@@ -593,67 +603,88 @@ const styles = {
     alignItems: 'center',
     whiteSpace: 'nowrap',
   },
-  tasaCard: {
-    background: '#fafafa',
-    border: '1px solid #f0f0f0',
-    borderRadius: '14px',
-    padding: '14px',
+  agregarRow: {
     display: 'flex',
-    flexDirection: 'column',
     gap: '8px',
-  },
-  tasaHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  tasaLabel: {
-    fontSize: '13px',
-    fontWeight: '600',
-    color: '#555',
-  },
-  toggle: {
-    display: 'flex',
-    border: '1px solid #e5e5e5',
-    borderRadius: '8px',
-    overflow: 'hidden',
-  },
-  toggleBtn: {
-    padding: '5px 14px',
+  agregarBtn: {
+    width: '40px',
+    height: '40px',
+    borderRadius: '10px',
     border: 'none',
-    background: 'transparent',
-    fontSize: '12px',
-    fontWeight: '600',
-    color: '#888',
-    cursor: 'pointer',
-  },
-  toggleActive: {
     background: '#2563eb',
     color: '#fff',
-  },
-  addBtn: {
-    padding: '10px',
-    borderRadius: '10px',
-    border: '1.5px dashed #e0e0e0',
-    background: 'transparent',
-    fontSize: '13px',
-    color: '#888',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: '6px',
-    fontWeight: '500',
+    flexShrink: 0,
   },
-  deleteBtn: {
-    padding: '6px',
-    borderRadius: '8px',
+  productoCard: {
+    background: '#fafafa',
+    border: '1px solid #f0f0f0',
+    borderRadius: '12px',
+    padding: '12px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+  },
+  productoTop: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  productoNombre: {
+    fontSize: '14px',
+    fontWeight: '600',
+    color: '#111',
+  },
+  productoBtns: {
+    display: 'flex',
+    gap: '4px',
+  },
+  btnIcono: {
+    padding: '5px',
+    borderRadius: '6px',
     border: 'none',
-    background: '#fff0f0',
-    color: '#ef4444',
+    background: 'transparent',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
+  },
+  productoPrecios: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  costoBadge: {
+    fontSize: '12px',
+    color: '#888',
+    fontWeight: '500',
+  },
+  ventaBadge: {
+    fontSize: '14px',
+    fontWeight: '700',
+    color: '#111',
+  },
+  resultadosHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  copiarTodoBtn: {
+    padding: '4px 10px',
+    borderRadius: '8px',
+    border: '1px solid #e0eaff',
+    background: '#f0f4ff',
+    fontSize: '11px',
+    fontWeight: '600',
+    color: '#2563eb',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
   },
   errorBox: {
     background: '#fef2f2',
@@ -667,81 +698,6 @@ const styles = {
     margin: '0',
     fontSize: '12px',
     color: '#ef4444',
-  },
-  resultados: {
-    background: '#f8faff',
-    border: '1px solid #e0eaff',
-    borderRadius: '14px',
-    padding: '16px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '10px',
-    marginTop: '4px',
-  },
-  resultRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: '8px',
-    paddingBottom: '8px',
-    borderBottom: '1px solid #eef2ff',
-  },
-  resultNombre: {
-    fontSize: '14px',
-    color: '#333',
-    fontWeight: '500',
-  },
-  resultPrecios: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-end',
-    gap: '2px',
-  },
-  resultPrecio: {
-    fontSize: '17px',
-    fontWeight: '700',
-    color: '#2563eb',
-  },
-  resultBs: {
-    fontSize: '13px',
-    fontWeight: '500',
-    color: '#888',
-  },
-  resultadosHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  copiarTodoBtn: {
-    padding: '5px 12px',
-    borderRadius: '8px',
-    border: '1px solid #e0eaff',
-    background: '#f0f4ff',
-    fontSize: '12px',
-    fontWeight: '600',
-    color: '#2563eb',
-    cursor: 'pointer',
-  },
-  copiarTodoBtnActivo: {
-    background: '#dcfce7',
-    border: '1px solid #bbf7d0',
-    color: '#16a34a',
-  },
-  copiarUnoBtn: {
-    padding: '6px 8px',
-    borderRadius: '8px',
-    border: 'none',
-    background: 'transparent',
-    fontSize: '14px',
-    cursor: 'pointer',
-    flexShrink: 0,
-    transition: 'color 0.2s',
-  },
-  resultInfo: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '2px',
-    flex: 1,
   },
   modalOverlay: {
     position: 'fixed',
@@ -763,7 +719,7 @@ const styles = {
     boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
     display: 'flex',
     flexDirection: 'column',
-    gap: '20px',
+    gap: '16px',
   },
   modalTexto: {
     margin: 0,
@@ -799,5 +755,6 @@ const styles = {
     cursor: 'pointer',
   },
 };
+
 
 export default Calculadora;
