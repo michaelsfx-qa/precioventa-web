@@ -37,6 +37,8 @@ function Calculadora() {
   const [tasas, setTasas] = useState({ usd: '', eur: '' });
   const [loadingTasas, setLoadingTasas] = useState(true);
   const [copiadoIndex, setCopiadoIndex] = useState(null);
+  const [copiadoTodo, setCopiadoTodo] = useState(false);
+  const [busqueda, setBusqueda] = useState('');
   const [modalEliminar, setModalEliminar] = useState(null);
   const [modalSalir, setModalSalir] = useState(false);
   const [modalLimpiar, setModalLimpiar] = useState(false);
@@ -58,6 +60,7 @@ function Calculadora() {
           if (datos.ganancia) setGanancia(datos.ganancia);
           if (datos.costoEnvio) setCostoEnvio(datos.costoEnvio);
           if (datos.comisionTarjeta) setComisionTarjeta(datos.comisionTarjeta);
+          if (datos.tipoBcv) setTipoBcv(datos.tipoBcv);
         }
       } catch (err) {
         console.error('No se pudo cargar el estado guardado');
@@ -73,7 +76,7 @@ function Calculadora() {
     const usuarioId = obtenerUsuarioId();
     if (!usuarioId) return;
     const timer = setTimeout(() => {
-      guardarEstado(usuarioId, { productos, ganancia, costoEnvio, comisionTarjeta }).catch(() => {});
+      guardarEstado(usuarioId, { productos, ganancia, costoEnvio, comisionTarjeta, tipoBcv }).catch(() => {});
     }, 500);
     return () => clearTimeout(timer);
   }, [productos, ganancia, costoEnvio, comisionTarjeta, estadoCargado]);
@@ -93,6 +96,13 @@ function Calculadora() {
     };
     cargarTasas();
   }, []);
+
+  useEffect(() => {
+    if (loadingTasas) return;
+    if (tasas[tipoBcv]) {
+      setTasaBcv(String(tasas[tipoBcv]));
+    }
+  }, [loadingTasas, tipoBcv, tasas]);
 
 const esNumeroValido = (valor) => {
     if (!valor || valor.trim() === '') return false;
@@ -219,6 +229,8 @@ const esNumeroValido = (valor) => {
       .map(p => `${p.nombreProducto}: ${p.precioUnitarioDolares}$ / ${p.precioUnitarioBolivares}Bs`)
       .join('\n');
     navigator.clipboard.writeText(texto);
+    setCopiadoTodo(true);
+    setTimeout(() => setCopiadoTodo(false), 2000);
   };
 
   const actualizarCampo = (setter, campo, valor) => {
@@ -343,37 +355,52 @@ const esNumeroValido = (valor) => {
         <ErrorMsg campo="costoNuevo" />
         <ErrorMsg campo="general" />
 
-        {/* Lista de productos */}
-        {productos.length > 0 && (
+       {/* Lista de productos */}
+        {productos.length > 0 && esNumeroValido(ganancia) && esNumeroValido(costoEnvio) && esNumeroValido(comisionTarjeta) && esNumeroValido(tasaBcv) && esNumeroValido(tasaUsdt) && (
           <>
             <div style={styles.resultadosHeader}>
               <p style={styles.sectionLabel}>Productos</p>
-              <button style={styles.copiarTodoBtn} onClick={copiarTodo}>
-                <Copy size={12} /> Copiar todo
+              <button style={{ ...styles.copiarTodoBtn, ...(copiadoTodo ? styles.copiarTodoBtnActivo : {}) }} onClick={copiarTodo}>
+                <Copy size={12} /> {copiadoTodo ? '✓ Copiado' : 'Copiar todo'}
               </button>
             </div>
-            {productos.map((p, i) => (
-              <div key={i} style={styles.productoCard}>
+            <div style={styles.inputGroup}>
+              <input
+                style={styles.inputInner}
+                placeholder="Buscar producto..."
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+              />
+            </div>
+            {productos
+              .filter(p => p.nombreProducto.toLowerCase().includes(busqueda.toLowerCase()))
+              .map((p) => {
+                const indexReal = productos.indexOf(p);
+                return (
+              <div key={indexReal} style={styles.productoCard}>
                 <div style={styles.productoTop}>
                   <span style={styles.productoNombre}>{p.nombreProducto}</span>
                   <div style={styles.productoBtns}>
-                    <button style={styles.btnIcono} onClick={() => copiarProducto(p, i)} title="Copiar">
-                      <Copy size={13} style={{ color: copiadoIndex === i ? '#16a34a' : '#aaa' }} />
+                    <button style={styles.btnIcono} onClick={() => copiarProducto(p, indexReal)} title="Copiar">
+                      <Copy size={13} style={{ color: copiadoIndex === indexReal ? '#16a34a' : '#aaa' }} />
                     </button>
-                    <button style={styles.btnIcono} onClick={() => abrirEditar(i)} title="Editar">
-                      <Pencil size={13} style={{ color: '#2563eb' }} />
+                    <button style={styles.btnIcono} onClick={() => abrirEditar(indexReal)} title="Editar">
+                      <Pencil size={13} style={{ color: '#aaa' }} />
                     </button>
-                    <button style={styles.btnIcono} onClick={() => eliminarProducto(i)} title="Eliminar">
-                      <Trash2 size={13} style={{ color: '#ef4444' }} />
+                    <button style={styles.btnIcono} onClick={() => eliminarProducto(indexReal)} title="Eliminar">
+                      <Trash2 size={13} style={{ color: '#aaa' }} />
                     </button>
                   </div>
                 </div>
                 <div style={styles.productoPrecios}>
                   <span style={styles.costoBadge}>Costo: ${p.costoProducto}</span>
-                  <span style={styles.ventaBadge}>{p.precioUnitarioDolares}$ / {p.precioUnitarioBolivares}Bs</span>
+                  <div style={styles.ventaBadge}>
+                    <span style={{ fontSize: '15px', fontWeight: '700', color: '#2563eb' }}>{p.precioUnitarioDolares} $</span>
+                    <span style={{ fontSize: '12px', fontWeight: '500', color: '#888' }}>{p.precioUnitarioBolivares} Bs</span>
+                  </div>
                 </div>
               </div>
-            ))}
+            );})}
           </>
         )}
 
@@ -622,8 +649,8 @@ const styles = {
     flexShrink: 0,
   },
   productoCard: {
-    background: '#fafafa',
-    border: '1px solid #f0f0f0',
+    background: '#f8faff',
+    border: '1px solid #e0eaff',
     borderRadius: '12px',
     padding: '12px',
     display: 'flex',
@@ -664,9 +691,10 @@ const styles = {
     fontWeight: '500',
   },
   ventaBadge: {
-    fontSize: '14px',
-    fontWeight: '700',
-    color: '#111',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: '2px',
   },
   resultadosHeader: {
     display: 'flex',
@@ -685,6 +713,11 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '4px',
+  },
+  copiarTodoBtnActivo: {
+    background: '#dcfce7',
+    border: '1px solid #bbf7d0',
+    color: '#16a34a',
   },
   errorBox: {
     background: '#fef2f2',
