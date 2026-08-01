@@ -187,7 +187,7 @@ const esNumeroValido = (valor) => {
 
   const confirmarEditar = () => {
     if (!esNumeroValido(costoEditar)) return;
-    const resultado = calcularPrecio(costoEditar);
+    const resultado = calcularPrecio(costoEditar, productos.length);
     if (!resultado) return;
     setProductos(prev => prev.map((p, i) =>
       i === modalEditar ? { ...p, costoProducto: costoEditar, ...resultado } : p
