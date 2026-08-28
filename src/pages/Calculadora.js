@@ -123,7 +123,7 @@ const esNumeroValido = (valor) => {
     const precioBase = (dolaresObjetivo * usdt) / bcv;
     const montoTarjeta = precioBase * (tar / 100);
     const precioUnitario = precioBase + montoTarjeta + envioPorProducto;
-    const fmt = (n) => { n = Math.round(n * 100) / 100; return n % 1 === 0 ? parseInt(n) : n; };
+    const fmt = (n) => Math.round(n);
     return {
       precioUnitarioDolares: fmt(precioUnitario),
       precioUnitarioBolivares: fmt(precioUnitario * bcv)
